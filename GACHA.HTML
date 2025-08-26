@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Gacha Bonusan Daily Toys</title>
+<style>
+  :root{
+    --page-bg: #ffffff;
+    --frame-bg: #000000;
+    --frame-border: #000000;
+    --text-color: #ffffff;
+    --small: 13px;
+    --watermark-opacity: 0.10; /* sesuaikan kecerahan watermark */
+    --watermark-size: 48px;    /* ukuran font watermark */
+    --max-width: 380px;        /* lebar kotak untuk hp */
+  }
+
+  html,body{
+    height:100%;
+    margin:0;
+    background:var(--page-bg);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:18px;
+    box-sizing:border-box;
+  }
+
+  .wrap{
+    width:100%;
+    max-width:var(--max-width);
+    box-sizing:border-box;
+  }
+
+  .title{
+    text-align:center;
+    margin:0 0 10px 0;
+    font-weight:700;
+    color:#111;
+    font-size:18px;
+    letter-spacing:0.2px;
+  }
+
+  /* kotak gacha (hitam frame) */
+  .gacha-frame{
+    background: var(--frame-bg);
+    color:var(--text-color);
+    border-radius:14px;
+    border:4px solid var(--frame-border);
+    padding:12px;
+    position:relative;
+    overflow:hidden;
+    min-height:160px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+  }
+
+  .gacha-inner{
+    width:100%;
+    height:100%;
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:6px 10px;
+    box-sizing:border-box;
+  }
+
+  /* watermark grid container - di belakang teks */
+  .watermark-grid{
+    position:absolute;
+    inset:0;
+    display:block;
+    pointer-events:none;
+    z-index:0;
+    overflow:hidden;
+  }
+
+  /* tiap teks watermark */
+  .wm-item{
+    position:absolute;
+    color: rgba(255,255,255,var(--watermark-opacity));
+    font-weight:800;
+    font-size: var(--watermark-size);
+    transform: rotate(-25deg);
+    white-space:nowrap;
+    letter-spacing: 2px;
+    user-select:none;
+  }
+
+  /* teks hasil (di atas watermark) */
+  .result-text{
+    position:relative;
+    z-index:2;
+    font-size:18px;
+    font-weight:700;
+    color:var(--text-color);
+    line-height:1.1;
+    padding:4px 8px;
+    word-break:break-word;
+    pointer-events:none; /* tidak bisa di-select / edit */
+  }
+
+  .controls{
+    margin-top:12px;
+    display:flex;
+    gap:8px;
+    justify-content:center;
+  }
+
+  .btn{
+    background:#000;
+    color:var(--text-color);
+    border:0;
+    padding:12px 18px;
+    border-radius:10px;
+    font-weight:700;
+    font-size:14px;
+    cursor:pointer;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.12);
+  }
+
+  .btn:active{ transform: translateY(1px); }
+  .btn[disabled]{ opacity:0.45; cursor:not-allowed; box-shadow:none; }
+
+  .hint{
+    margin-top:10px;
+    font-size: var(--small);
+    color:#222;
+    text-align:center;
+  }
+
+  .send-note{
+    margin-top:8px;
+    font-size:12px;
+    color:#222;
+    text-align:center;
+    display:none;
+  }
+
+  /* rolling animation */
+  .rolling {
+    animation: rollingAnim 0.12s steps(1) infinite;
+  }
+  @keyframes rollingAnim {
+    0% { transform: translateY(0); opacity:0.6; }
+    50% { transform: translateY(-6px); opacity:1; }
+    100% { transform: translateY(0); opacity:0.85; }
+  }
+
+  @media (max-height:600px){
+    .gacha-frame{ min-height:140px; }
+    .result-text{ font-size:16px; }
+    :root{ --watermark-size:40px; }
+  }
+
+  /* kecilkan teks instruksi */
+  .footer-small { font-size:12px; color:#555; text-align:center; margin-top:8px; }
+</style>
+</head>
+<body>
+  <div class="wrap" role="main">
+    <h1 class="title">Gacha Bonusan Daily Toys</h1>
+
+    <div class="gacha-frame" aria-live="polite" aria-atomic="true">
+      <div class="gacha-inner">
+        <!-- watermark grid (JS akan mengisi banyak teks "Daily Toys") -->
+        <div class="watermark-grid" id="watermarkGrid" aria-hidden="true"></div>
+
+        <!-- hasil: plain text (bukan input), tidak bisa diubah lewat UI -->
+        <div class="result-text" id="resultText">Tekan tombol GACHA</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="gachaBtn" aria-controls="resultText">GACHA SEKALI</button>
+      <button class="btn" id="resetBtn" style="display:none;background:#555">RESET (Admin)</button>
+    </div>
+
+    <div class="send-note" id="sendNote">
+      Jangan lupa Screenshot + kirim ke chat Whatsapp Febri Pangestu
+    </div>
+
+    <div class="hint footer-small">Sekali gacha per perangkat. Hasil disimpan otomatis.</div>
+  </div>
+
+<script>
+/* SETTINGS */
+const STORAGE_KEY = "dailytoys_gacha_v1";
+const FINAL_PRIZE = "Free Ongkir Maks 10k";
+const FAKE_ITEMS = [
+  "Free Ongkir Maks 20k",
+  "Hotwheels Regular Random",
+  "Mini GT Random",
+  "MGT Kaido Random",
+  "Hotwheels Premium Random",
+  "Free Ongkir Maks 10k"
+];
+
+/* DOM */
+const watermarkGrid = document.getElementById('watermarkGrid');
+const resultText = document.getElementById('resultText');
+const gachaBtn = document.getElementById('gachaBtn');
+const resetBtn = document.getElementById('resetBtn');
+const sendNote = document.getElementById('sendNote');
+
+/* Init watermark grid: buat banyak teks "Daily Toys" menutupi area */
+function buildWatermark(){
+  // bersihin dulu
+  watermarkGrid.innerHTML = '';
+  const rect = watermarkGrid.getBoundingClientRect();
+  const tileW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--watermark-size')) || 48;
+  const spacingX = tileW * 1.9; // jarak horizontal
+  const spacingY = tileW * 1.8; // jarak vertikal
+
+  // tambahkan offset supaya pattern tidak pas grid
+  const cols = Math.ceil(rect.width / spacingX) + 2;
+  const rows = Math.ceil(rect.height / spacingY) + 2;
+
+  for(let r= -1; r<rows; r++){
+    for(let c= -1; c<cols; c++){
+      const span = document.createElement('span');
+      span.className = 'wm-item';
+      span.textContent = 'DAILY TOYS';
+      // posisi beraturan + sedikit random offset
+      const left = c * spacingX + (r%2 ? spacingX/2 : 0) + (Math.random()*8 - 4);
+      const top = r * spacingY + (Math.random()*8 - 4);
+      span.style.left = left + 'px';
+      span.style.top = top + 'px';
+      span.style.opacity = getComputedStyle(document.documentElement).getPropertyValue('--watermark-opacity') || 0.08;
+      watermarkGrid.appendChild(span);
+    }
+  }
+}
+
+/* Resize observer untuk rebuild watermark saat ukuran berubah */
+let resizeTimer = null;
+function handleResize(){
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(()=> buildWatermark(), 120);
+}
+window.addEventListener('resize', handleResize);
+
+/* localStorage state management */
+function loadState(){
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); }
+  catch(e){ return null; }
+}
+function saveState(payload){
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch(e) {}
+}
+
+/* tampilkan state jika sudah pernah gacha */
+const existing = loadState();
+if(existing && existing.done){
+  showResult(existing.result, true);
+  lockGacha();
+}
+
+/* spin logic: 4 detik rolling */
+let rollingTimer = null;
+function startRolling(){
+  gachaBtn.disabled = true;
+  resultText.classList.add('rolling');
+
+  let i = 0;
+  rollingTimer = setInterval(()=>{
+    resultText.textContent = FAKE_ITEMS[i % FAKE_ITEMS.length];
+    i++;
+  }, 100);
+
+  setTimeout(()=>{
+    clearInterval(rollingTimer);
+    resultText.classList.remove('rolling');
+
+    // final (fixed to FINAL_PRIZE)
+    const final = FINAL_PRIZE;
+    showResult(final, false);
+    saveState({ done:true, result: final, at: new Date().toISOString() });
+    lockGacha();
+  }, 4000); // 4 detik
+}
+
+function showResult(text, fromStorage){
+  resultText.textContent = text;
+  sendNote.style.display = 'block';
+  if(fromStorage) gachaBtn.disabled = true;
+}
+
+function lockGacha(){
+  gachaBtn.disabled = true;
+  resetBtn.style.display = 'inline-block';
+}
+
+/* admin reset (untuk testing) */
+resetBtn.addEventListener('click', ()=>{
+  localStorage.removeItem(STORAGE_KEY);
+  location.reload();
+});
+
+/* main click */
+gachaBtn.addEventListener('click', ()=>{
+  const cur = loadState();
+  if(cur && cur.done) { showResult(cur.result, true); return; }
+  startRolling();
+});
+
+/* protect result from user editing via selection */
+resultText.addEventListener('mousedown', (e)=> e.preventDefault());
+resultText.setAttribute('aria-readonly','true');
+
+/* initial build watermark after DOM ready */
+document.addEventListener('DOMContentLoaded', ()=>{
+  buildWatermark();
+  // small delay to ensure layout stable
+  setTimeout(buildWatermark, 120);
+});
+</script>
+</body>
+</html>
